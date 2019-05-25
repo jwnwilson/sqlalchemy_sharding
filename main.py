@@ -24,13 +24,16 @@ class _BindingKeyPattern(object):
     def match(self, key):
         return self.compiled_pattern.match(key)
 
-    def get_shard_key(self, hash_num):
-        import pdb;pdb.set_trace()
+    def get_shard_key(self, hash_num, write=False):
         if self._shard_keys is None:
             self._shard_keys = [
                 key for key, value in self.db.app.config['SQLALCHEMY_BINDS'].
                 items() if self.compiled_pattern.match(key)
             ]
+            if write:
+                self._shard_keys = [
+                    key for key in self._shard_keys if 'master' in key
+                ] 
             self._shard_keys.sort()
 
         return self._shard_keys[hash_num % len(self._shard_keys)]
@@ -63,7 +66,7 @@ class _SignallingSession(BaseSignallingSession):
         self._binding_key = self._binding_keys.pop()
 
     def get_bind(self, mapper, clause=None):
-        binding_key = self.__find_binding_key(mapper)
+        binding_key = self.__find_binding_key_from_context(mapper)
         if binding_key is None:
             return BaseSignallingSession.get_bind(self, mapper, clause)
         else:
@@ -71,6 +74,38 @@ class _SignallingSession(BaseSignallingSession):
             return state.db.get_engine(self.app, bind=binding_key)
 
     def __find_binding_key(self, mapper):
+        """Will attempt to find a binding for the model based on it's regex patten and
+        master if attempting to write or a slave if reading
+
+        NOTE: Not currently used as unable to dynamically route based on user with this method
+        """
+        if mapper is None:
+            return self._binding_key
+        else:
+            mapper_info = getattr(mapper.mapped_table, 'info', {})
+            mapped_binding_key = mapper_info.get('bind_key')
+            if mapped_binding_key:
+                if type(mapped_binding_key) is str:
+                    return mapped_binding_key
+                else:
+                    shard_keys = sorted([
+                        key for key, value in self.app.config['SQLALCHEMY_BINDS'].
+                        items() if mapped_binding_key.match(key)
+                    ])
+                    if self._flushing:
+                        shard_keys = [key for key in shard_keys if 'master' in key]
+
+                    if shard_keys:
+                        return shard_keys[0]
+
+        return self._binding_key
+
+    def __find_binding_key_from_context(self, mapper):
+        """Will attempt to return a binding for the model in the current stack of 
+        db.binding() contexts. e.g. if a user model is accessed will return current binding
+        if it matches user regex pattern and will travel up the db.binding() contexts 
+        attempting to find one that matchs
+        """
         if mapper is None:
             return self._binding_key
         else:
@@ -176,8 +211,8 @@ class User(db.Model):
         )
 
     @classmethod
-    def get_shard_key(cls, nickname):
-        return cls.__bind_key__.get_shard_key(hash(nickname))
+    def get_shard_key(cls, nickname, write=False):
+        return cls.__bind_key__.get_shard_key(hash(nickname), write=write)
 
 
 class LoginLog(db.Model):
@@ -207,7 +242,7 @@ if __name__ == '__main__':
     db.session.commit()
 
     nickname = 'jaru'
-    with db.binding(User.get_shard_key(nickname)):
+    with db.binding(User.get_shard_key(nickname, write=True)):
         notice = Notice(msg='NOTICE2')
         db.session.add(notice)
         db.session.commit()
