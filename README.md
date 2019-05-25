@@ -10,13 +10,11 @@ Looking at horizontal scaling of database data across multiple db nodes
 
 This snippet will setup 6 database "nodes" which are just sqlite files these could be sustituted for postgres servers. These are setup with binds which is a key map for sqlalchemy for databases.
 
-The Notice model is matched to the global database node in a straight forward fashion. The user and log models have a regex binding pattern, they will randomly go to a different bound database based on the hash value defined in the get_shard_key.
+The Notice model is matched to the global database node in a straight forward fashion. The user and log models have a regex binding pattern, they are bound to the user and log database nodes. This code expects context managers to be used to set which database nodes to use in the session, when accessing a model or writing the scoped session will attempt to look for a bind in the context stack that matches the model regex. In simple terms a model regex is used to select the possible databases we can use and then hashing on user values gives us the selection of the available databases to use for the data.
+
+I've added a write arguement so that if we need write access available we can select are limited to master nodes, users should be stored randonly across the 2 master nodes. The slaves should not be used in this example as they would be replicated by database mechanisms.
 
 This means we have vertical and horizontal scaling in our sqlalchemy snippet.
-
-## Master slave dbs
-
-Master DBs should be the only databases receiving write queries currently this isn't setup and the regex filters out slave databases althrough this should be modified to only make writes to mater dbs
 
 ### get_tables_for_bind()
 
