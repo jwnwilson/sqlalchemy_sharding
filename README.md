@@ -22,6 +22,7 @@ Master DBs should be the only databases receiving write queries currently this i
 
 This is used to add tables for each database, if a `__bind__` regex pattern matches the name of a database that table will be added to the database, so for example:
 
+```
 class User(db.Model):
     __bind_key__ = db.BindingKeyPattern('[^_]+_user_\d\d')
 
@@ -29,7 +30,7 @@ will be added to :
     'master_user_01': 'sqlite:///./master_user_01.db',
     'master_user_02': 'sqlite:///./master_user_02.db',
     'slave_user': 'sqlite:///./slave_user.db',
-
+```
 
 ## Setup
 
