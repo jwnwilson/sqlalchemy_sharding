@@ -6,7 +6,6 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy as BaseSQLAlchemy
 from flask_sqlalchemy import SignallingSession as BaseSignallingSession
 from flask_sqlalchemy import orm, get_state
-import sqlalchemy.orm as orm
 from functools import partial
 
 from datetime import datetime
@@ -14,7 +13,7 @@ from datetime import datetime
 
 class _BindingKeyPattern(object):
     def __init__(self, db, pattern):
-        self.db = db 
+        self.db = db
         self.raw_pattern = pattern
         self.compiled_pattern = re.compile(pattern)
         self._shard_keys = None
@@ -26,8 +25,12 @@ class _BindingKeyPattern(object):
         return self.compiled_pattern.match(key)
 
     def get_shard_key(self, hash_num):
+        import pdb;pdb.set_trace()
         if self._shard_keys is None:
-            self._shard_keys = [key for key, value in self.db.app.config['SQLALCHEMY_BINDS'].items() if self.compiled_pattern.match(key)]
+            self._shard_keys = [
+                key for key, value in self.db.app.config['SQLALCHEMY_BINDS'].
+                items() if self.compiled_pattern.match(key)
+            ]
             self._shard_keys.sort()
 
         return self._shard_keys[hash_num % len(self._shard_keys)]
@@ -81,10 +84,19 @@ class _SignallingSession(BaseSignallingSession):
                         return self._binding_key
                     else:
                         for pushed_binding_key in reversed(self._binding_keys):
-                            if pushed_binding_key and mapped_binding_key.match(pushed_binding_key):
+                            if pushed_binding_key and mapped_binding_key.match(
+                                pushed_binding_key
+                            ):
                                 return pushed_binding_key
                         else:
-                            raise Exception('NOT_FOUND_MAPPED_BINDING:%s CURRENT_BINDING:%s PUSHED_BINDINGS:%s' % (repr(mapped_binding_key), repr(self._binding_key), repr(self._binding_keys[1:])))
+                            raise Exception(
+                                'NOT_FOUND_MAPPED_BINDING:%s CURRENT_BINDING:%s PUSHED_BINDINGS:%s'
+                                % (
+                                    repr(mapped_binding_key),
+                                    repr(self._binding_key),
+                                    repr(self._binding_keys[1:])
+                                )
+                            )
             else:
                 return self._binding_key
 
@@ -99,14 +111,14 @@ class SQLAlchemy(BaseSQLAlchemy):
     def create_scoped_session(self, options=None):
         if options is None:
             options = {}
-        scopefunc=options.pop('scopefunc', None)
+        scopefunc = options.pop('scopefunc', None)
         return orm.scoped_session(
             partial(_SignallingSession, self, **options), scopefunc=scopefunc
         )
 
     def get_binds(self, app=None):
         retval = BaseSQLAlchemy.get_binds(self, app)
-       
+
         bind = None
         engine = self.get_engine(app, bind)
         tables = self.get_tables_for_bind(bind)
@@ -121,9 +133,13 @@ class SQLAlchemy(BaseSQLAlchemy):
                 result.append(table)
             else:
                 if bind:
-                    if type(table_bind_key) is _BindingKeyPattern and table_bind_key.match(bind):
+                    if type(
+                        table_bind_key
+                    ) is _BindingKeyPattern and table_bind_key.match(bind):
                         result.append(table)
-                    elif type(table_bind_key) is str and table_bind_key == bind:
+                    elif type(
+                        table_bind_key
+                    ) is str and table_bind_key == bind:
                         result.append(table)
 
         return result
@@ -141,7 +157,9 @@ class Notice(db.Model):
     ctime = db.Column(db.DateTime, default=datetime.now(), nullable=False)
 
     def __repr__(self):
-        return "%s<id=%d,msg='%s'>" % (self.__class__.__name__, self.id, self.msg)
+        return "%s<id=%d,msg='%s'>" % (
+            self.__class__.__name__, self.id, self.msg
+        )
 
 
 class User(db.Model):
@@ -153,7 +171,9 @@ class User(db.Model):
     login_logs = db.relationship(lambda: LoginLog, backref='owner')
 
     def __repr__(self):
-        return "%s<id=%d, nickname='%s'>" % (self.__class__.__name__, self.id, self.nickname)
+        return "%s<id=%d, nickname='%s'>" % (
+            self.__class__.__name__, self.id, self.nickname
+        )
 
     @classmethod
     def get_shard_key(cls, nickname):
@@ -174,11 +194,11 @@ if __name__ == '__main__':
         'global': 'sqlite:///./global.db',
         'master_user_01': 'sqlite:///./master_user_01.db',
         'master_user_02': 'sqlite:///./master_user_02.db',
-        'slave_user': 'sqlite:///./slave_user.db',
-        'master_log':  'sqlite:///./master_log.db', 
-        'slave_log':  'sqlite:///./slave_log.db', 
+        'slave_user_01': 'sqlite:///./slave_user_01.db',
+        'master_log': 'sqlite:///./master_log.db',
+        'slave_log': 'sqlite:///./slave_log.db',
     }
-    
+
     db.drop_all()
     db.create_all()
 
