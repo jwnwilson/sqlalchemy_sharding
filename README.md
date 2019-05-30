@@ -1,5 +1,16 @@
 # SQL Sharding
 
+
+## Setup
+
+```
+brew install pyenv
+brew install direnv
+brew install pyenv-virtualenv
+
+direnv allow
+```
+
 Playing around with sharding from this example I found:
 
 https://gist.github.com/ziplus4/3bf8cc14541a16c65206
